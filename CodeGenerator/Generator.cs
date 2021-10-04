@@ -23,7 +23,7 @@ namespace CodeGenerator
 					throw new ArgumentException("An output path must be provided in command line arguments.");
 				}
 
-				ProcessFile("include/phonon_interfaces.h", Path.GetFullPath(args[0]), "IPL.Generated.cs", "SteamAudio", "IPL");
+				ProcessFile("include/steamnetworkingsockets.h", Path.GetFullPath(args[0]), "SteamNetworking.Generated.cs", "Steam", "Networking");
 
 				Console.WriteLine("Success.");
 				Thread.Sleep(500);

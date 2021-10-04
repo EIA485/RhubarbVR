@@ -7,14 +7,13 @@ using System.Text;
 using System.Threading.Tasks;
 using RhubarbEngine.World.DataStructure;
 
-using Valve.Sockets;
-
+using Steam;
 namespace RhubarbEngine.World.Net
 {
 	public class SteamPeer : Peer
 	{
 		public SteamNetModule netModule;
-        public NetworkingSockets client;
+        public Networking.ISteamNetworkingSockets client;
         public bool IsClientConnection;
         public uint clientConnected;
 		public SteamPeer(SteamNetModule _netModule,uint client)
@@ -23,22 +22,22 @@ namespace RhubarbEngine.World.Net
             clientConnected = client;
         }
 
-        public SteamPeer(SteamNetModule _netModule, Address address)
+        public SteamPeer(SteamNetModule _netModule, Networking.SteamNetworkingIPAddr address)
         {
             netModule = _netModule;
-            client = new NetworkingSockets();
-            clientConnected = client.Connect(ref address);
+            clientConnected = client.ConnectByIPAddress(ref address,0,new Networking.SteamNetworkingConfigValue_t { });
             IsClientConnection = true;
             Send(netModule.ConectionReqweset(), ReliabilityLevel.Reliable);
         }
         public override void Send(byte[] val, ReliabilityLevel reliableOrdered)
 		{
+            long outmsg = 0; 
             if (IsClientConnection)
             {
                 switch (reliableOrdered)
                 {
                     case ReliabilityLevel.Unreliable:
-                        client.SendMessageToConnection(clientConnected, val, SendFlags.Unreliable);
+                        client.SendMessageToConnection(clientConnected, val,val.Length, Networking.k_nSteamNetworkingSend_Unreliable,ref outmsg);
                         break;
                     case ReliabilityLevel.LatestOnly:
                         client.SendMessageToConnection(clientConnected, val, SendFlags.NoNagle);
