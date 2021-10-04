@@ -140,10 +140,6 @@ namespace RhubarbEngine
             BulletSharp.Loader.Start();
             var ster = new StringBuilder(1024);
             logger.Log("Initialize Steam Networking");
-            if (Valve.Sockets.Library.Initialize(ster))
-            {
-                logger.Log("Steam Networking Error " + ster.ToString(),true);
-            }
             engineInitializer = (IEngineInitializer)Activator.CreateInstance(typeof(TEngineInitializer), this);
             engineInitializer.CreateLocalWorld = createLocalWorld;
             logger.Log("Loading Arguments:", true);

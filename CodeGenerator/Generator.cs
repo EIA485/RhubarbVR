@@ -23,7 +23,7 @@ namespace CodeGenerator
 					throw new ArgumentException("An output path must be provided in command line arguments.");
 				}
 
-				ProcessFile("include/steamnetworkingsockets.h", Path.GetFullPath(args[0]), "SteamNetworking.Generated.cs", "Steam", "Networking");
+				ProcessFile("include/*", Path.GetFullPath(args[0]), "SteamNetworking.Generated.cs", "Steam", "Networking");
 
 				Console.WriteLine("Success.");
 				Thread.Sleep(500);
@@ -43,46 +43,18 @@ namespace CodeGenerator
 
 			Console.WriteLine($"Processing file '{Path.GetFileName(inputFile)}'...");
 
-			//Writing
-			var converterOptions = new CSharpConverterOptions()
-			{
-				DefaultNamespace = defaultNamespace,
-				DefaultClassLib = defaultClass,
-				DefaultOutputFilePath = outputFile,
-				DefaultDllImportNameAndArguments = "Library",
-				DispatchOutputPerInclude = false,
-				GenerateEnumItemAsFields = false,
-				TypedefCodeGenKind = CppTypedefCodeGenKind.NoWrap,
-
+            //Writing
+            var converterOptions = new CSharpConverterOptions()
+            {
+                DefaultNamespace = defaultNamespace,
+                DefaultClassLib = defaultClass,
+                DefaultOutputFilePath = outputFile,
+                DefaultDllImportNameAndArguments = "Library",
+                DispatchOutputPerInclude = true,
+                GenerateEnumItemAsFields = true,
+                TypedefCodeGenKind = CppTypedefCodeGenKind.Wrap,
+                ParseAsCpp = true,
 				MappingRules = {
-					//Remove prefixes from elements' names.
-					e => e.MapAll<CppElement>().CppAction((converter, element) => {
-						if(element is ICppMember member) {
-							string prefix = member switch {
-								CppType _ => "IPL",
-								CppEnumItem _ => "IPL_",
-								_ => null
-							};
-
-							if(prefix != null) {
-								member.Name = StringUtils.Capitalize(StringUtils.RemovePrefix(member.Name, prefix));
-							}
-						}
-					}).CSharpAction((converter, element) => {
-						if(element is CSharpMethod method) {
-							const string Prefix = "ipl";
-
-							string oldName = method.Name;
-							string newName = StringUtils.Capitalize(StringUtils.RemovePrefix(oldName, Prefix));
-
-							//Add an EntryPoint parameter to the DllImportAttribute, so that this rename doesn't break anything.
-							if(method.Attributes.FirstOrDefault(attrib => attrib is CSharpDllImportAttribute) is CSharpDllImportAttribute dllImportAttribute) {
-								dllImportAttribute.EntryPoint = $@"""{oldName}""";
-							}
-
-							method.Name = newName;
-						}
-					}),
 
 					//Replace the bool enum with an actual bool.
 					e => e.Map<CppEnum>("Bool").Discard(),
@@ -186,33 +158,20 @@ namespace CodeGenerator
 						}
 					}),
 
-					//Turn a 2D fixed array into an 1D one.
-					e => e.Map<CppField>("Matrix4x4::elements").Type("float", 16),
-
-					//Manually fix casing on some enum properties. This could theoretically be made automatic through crazy dictionary-based algorithms, but that's overkill.
-					e => e.Map<CppEnumItem>("Error::Outofmemory").Name("OutOfMemory"),
-					e => e.Map<CppEnumItem>("SceneType::Radeonrays").Name("RadeonRays"),
-					e => e.Map<CppEnumItem>("ConvolutionType::Trueaudionext").Name("TrueAudioNext"),
-					e => e.Map<CppEnumItem>("ChannelLayout::Fivepointone").Name("FivePointOne"),
-					e => e.Map<CppEnumItem>("ChannelLayout::Sevenpointone").Name("SevenPointOne"),
-					e => e.Map<CppEnumItem>("AmbisonicsOrdering::Fursemalham").Name("FurseMalham"),
-					e => e.Map<CppEnumItem>("AmbisonicsNormalization::Fursemalham").Name("FurseMalham"),
-					e => e.Map<CppEnumItem>("AmbisonicsNormalization::Sn3d").Name("SN3D"),
-					e => e.Map<CppEnumItem>("AmbisonicsNormalization::N3d").Name("N3D"),
-					e => e.Map<CppEnumItem>("DistanceAttenuationModelType::Inversedistance").Name("InversedDistance"),
-					e => e.Map<CppEnumItem>("DirectOcclusionMode::Notransmission").Name("NoTransmission"),
-					e => e.Map<CppEnumItem>("DirectOcclusionMode::Transmissionbyvolume").Name("TransmissionByVolume"),
-					e => e.Map<CppEnumItem>("DirectOcclusionMode::Transmissionbyfrequency").Name("TransmissionByFrequency"),
-					e => e.Map<CppEnumItem>("BakedDataType::Staticsource").Name("StaticSource"),
-					e => e.Map<CppEnumItem>("BakedDataType::Staticlistener").Name("StaticListener"),
-					e => e.Map<CppEnumItem>("BakedDataType::Uniformfloor").Name("UniformFloor"),
 				}
 			};
 
 			converterOptions.IncludeFolders.Add(Path.GetDirectoryName(inputFile));
-
-			var compilation = CSharpConverter.Convert(new List<string> { inputFile }, converterOptions);
-
+            CSharpCompilation compilation;
+            if (Path.GetFileName(inputFile) == "*")
+            {
+                var files = Directory.GetFiles(inputFile.Remove(inputFile.Length-1));
+                 compilation = CSharpConverter.Convert(new List<string>(files), converterOptions);
+            }
+            else
+            {
+                 compilation = CSharpConverter.Convert(new List<string> { inputFile }, converterOptions);
+            }
 			if (compilation.HasErrors)
 			{
 				foreach (var message in compilation.Diagnostics.Messages)
