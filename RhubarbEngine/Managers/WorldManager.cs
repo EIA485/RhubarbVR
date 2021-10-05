@@ -198,7 +198,6 @@ namespace RhubarbEngine.Managers
             {
                 Task.Run(() =>
                 {
-                    var isNetworkedLocal= false;
                     Engine.Logger.Log("Starting Local World");
                     //temp for fast network testing
                     var isNetworkedLocal = false;
