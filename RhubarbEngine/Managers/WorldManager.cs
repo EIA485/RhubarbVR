@@ -198,6 +198,7 @@ namespace RhubarbEngine.Managers
             {
                 Task.Run(() =>
                 {
+                    var isNetworkedLocal= false;
                     Engine.Logger.Log("Starting Local World");
                     //temp for fast network testing
                     var isNetworkedLocal = false;
@@ -207,6 +208,7 @@ namespace RhubarbEngine.Managers
                         {
                             var node = new DataNodeGroup(File.ReadAllBytes(Engine.DataPath + "/LocalWorld.RWorld"));
                             LocalWorld = new World.World(this, "LocalWorld", 16, false, isNetworkedLocal, node);
+
                         }
                         catch (Exception e)
                         {
