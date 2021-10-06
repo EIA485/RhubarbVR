@@ -138,7 +138,6 @@ namespace RhubarbEngine
             verbose = _verbose;
             logger = (IUnitLogs)Activator.CreateInstance(typeof(TUnitLogs), this);
             BulletSharp.Loader.Start();
-            Valve.Sockets.Library.Initialize();
             var ster = new StringBuilder(1024);
             logger.Log("Initialize Steam Networking");
             engineInitializer = (IEngineInitializer)Activator.CreateInstance(typeof(TEngineInitializer), this);

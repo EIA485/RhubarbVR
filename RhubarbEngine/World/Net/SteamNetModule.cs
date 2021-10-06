@@ -15,7 +15,7 @@ namespace RhubarbEngine.World.Net
     public class SteamPeer : Peer
     {
         public SteamNetModule netModule;
-        public NetworkingSockets client;
+        public Native.ISteamNetworkingSockets client;
         public bool IsClientConnection;
         public uint clientConnected;
         public SteamPeer(SteamNetModule _netModule, uint client)
@@ -24,50 +24,51 @@ namespace RhubarbEngine.World.Net
             clientConnected = client;
         }
 
-        public SteamPeer(SteamNetModule _netModule, Address address)
+        public SteamPeer(SteamNetModule _netModule)
         {
             netModule = _netModule;
-            client = new NetworkingSockets();
-            clientConnected = client.Connect(ref address);
             IsClientConnection = true;
             Send(netModule.ConectionReqweset(), ReliabilityLevel.Reliable);
         }
-        public override void Send(byte[] val, ReliabilityLevel reliableOrdered)
+        public override unsafe void Send(byte[] val, ReliabilityLevel reliableOrdered)
         {
-            if (IsClientConnection)
+            fixed (byte* pointv = val)
             {
-                switch (reliableOrdered)
+                if (IsClientConnection)
                 {
-                    case ReliabilityLevel.Unreliable:
-                        client.SendMessageToConnection(clientConnected, val, SendFlags.Unreliable);
-                        break;
-                    case ReliabilityLevel.LatestOnly:
-                        client.SendMessageToConnection(clientConnected, val, SendFlags.NoNagle);
-                        break;
-                    case ReliabilityLevel.Reliable:
-                        client.SendMessageToConnection(clientConnected, val, SendFlags.Reliable);
-                        break;
-                    default:
-                        client.SendMessageToConnection(clientConnected, val, SendFlags.NoDelay);
-                        break;
+                    switch (reliableOrdered)
+                    {
+                        case ReliabilityLevel.Unreliable:
+                            client.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_Unreliable,IntPtr.Zero);
+                            break;
+                        case ReliabilityLevel.LatestOnly:
+                            client.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_NoNagle, IntPtr.Zero);
+                            break;
+                        case ReliabilityLevel.Reliable:
+                            client.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_Reliable, IntPtr.Zero);
+                            break;
+                        default:
+                            client.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_NoDelay, IntPtr.Zero);
+                            break;
+                    }
                 }
-            }
-            else
-            {
-                switch (reliableOrdered)
+                else
                 {
-                    case ReliabilityLevel.Unreliable:
-                        netModule.server.SendMessageToConnection(clientConnected, val, SendFlags.Unreliable);
-                        break;
-                    case ReliabilityLevel.LatestOnly:
-                        netModule.server.SendMessageToConnection(clientConnected, val, SendFlags.NoNagle);
-                        break;
-                    case ReliabilityLevel.Reliable:
-                        netModule.server.SendMessageToConnection(clientConnected, val, SendFlags.Reliable);
-                        break;
-                    default:
-                        netModule.server.SendMessageToConnection(clientConnected, val, SendFlags.NoDelay);
-                        break;
+                    switch (reliableOrdered)
+                    {
+                        case ReliabilityLevel.Unreliable:
+                            netModule.server.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_Unreliable, IntPtr.Zero);
+                            break;
+                        case ReliabilityLevel.LatestOnly:
+                            netModule.server.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_NoNagle, IntPtr.Zero);
+                            break;
+                        case ReliabilityLevel.Reliable:
+                            netModule.server.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_Reliable, IntPtr.Zero);
+                            break;
+                        default:
+                            netModule.server.SendMessageToConnection(clientConnected, (IntPtr)pointv, (uint)val.Length, Native.k_nSteamNetworkingSend_NoDelay, IntPtr.Zero);
+                            break;
+                    }
                 }
             }
         }
@@ -76,20 +77,16 @@ namespace RhubarbEngine.World.Net
 
     public class SteamNetModule : NetModule
     {
-        public NetworkingSockets server = new();
-
+        public Native.ISteamNetworkingSockets server;
+        
         const int MAX_MESSAGES = 20;
-        public NetworkingMessage[] netMessages = new NetworkingMessage[MAX_MESSAGES];
+        public Native.ISteamNetworkingMessages[] netMessages = new Native.ISteamNetworkingMessages[MAX_MESSAGES];
         public uint pollGroup;
         public override void Connect(string token)
         {
-            var address = new Address();
-            var colonIndex = token.IndexOf(':');
-            var host = token.Substring(0, colonIndex);
-            var port = token.Substring(colonIndex + 1);
-            address.SetAddress(host, ushort.Parse(port));
-            rhuPeers.Add(new SteamPeer(this, address));
+            rhuPeers.Add(new SteamPeer(this));
             pollGroup = server.CreatePollGroup();
+            
         }
 
 
@@ -100,10 +97,7 @@ namespace RhubarbEngine.World.Net
         public SteamNetModule(World world) : base(world)
         {
             Console.WriteLine("Starting net");
-            var address = new Address();
-            address.SetAddress("::0", 5271);
-            server.CreateListenSocket(ref address);
-
+            _ = Native.SteamAPI_ISteamNetworkingSockets_CreateListenSocketP2P(ref server, 5276, 0, IntPtr.Zero);
         }
 
         public SteamPeer GetPearFromClientID(uint id)
@@ -126,21 +120,21 @@ namespace RhubarbEngine.World.Net
         {
             base.Netupdate();
             server.RunCallbacks();
-            var netMessagesCount = server.ReceiveMessagesOnPollGroup(pollGroup, netMessages, MAX_MESSAGES);
+            var netMessagesCount = server.ReceiveMessagesOnPollGroup(pollGroup,netMessages, MAX_MESSAGES);
 
             if (netMessagesCount > 0)
             {
                 for (var i = 0; i < netMessagesCount; i++)
                 {
-                    ref var netMessage = ref netMessages[i];
-                    var peer = GetPearFromClientID(netMessage.connection);
-                    if (peer is null)
-                    {
-                        peer = new SteamPeer(this, netMessage.connection);
-                        rhuPeers.Add(peer);
-                    }
-                    _world.NetworkReceiveEvent(new Span<byte>(netMessage.data.ToPointer(), netMessage.length).ToArray(), peer);
-                    netMessage.Destroy();
+                    //ref var netMessage = ref netMessages[i];
+                    //var peer = GetPearFromClientID(netMessage.);
+                    //if (peer is null)
+                    //{
+                    //    peer = new SteamPeer(this, netMessage.connection);
+                    //    rhuPeers.Add(peer);
+                    //}
+                    //_world.NetworkReceiveEvent(new Span<byte>(netMessage..ToPointer(), netMessage.length).ToArray(), peer);
+                    //netMessage.Destroy();
                 }
             }
         }
